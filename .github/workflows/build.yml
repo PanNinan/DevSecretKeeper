@@ -1,0 +1,98 @@
+name: Build - 构建打包
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            os: windows-latest
+            artifact_name: DevSecretKeeper-Windows-x64.exe
+            pyinstaller_args: --onefile --windowed --icon=favicon.ico --name=DevSecretKeeper
+          - platform: linux-x64
+            os: ubuntu-latest
+            artifact_name: DevSecretKeeper-Linux-x64
+            pyinstaller_args: --onefile --windowed --icon=favicon.ico --name=DevSecretKeeper
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 运行测试
+        run: |
+          pip install pytest
+          python -m pytest tests/ -v --tb=short
+
+      - name: 安装 PyInstaller (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxcb-xinerama0 libxcb-cursor0 libgl1-mesa-glx
+          pip install pyinstaller
+
+      - name: 安装 PyInstaller (Windows)
+        if: runner.os == 'Windows'
+        run: pip install pyinstaller
+
+      - name: 构建 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run pyinstaller ${{ matrix.pyinstaller_args }} main.py
+
+      - name: 构建 (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller ${{ matrix.pyinstaller_args }} main.py
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: DevSecretKeeper-${{ matrix.platform }}
+          path: dist/
+          retention-days: 7
+
+  release:
+    name: 创建 Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: 列出产物
+        run: find artifacts/ -type f | head -20
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

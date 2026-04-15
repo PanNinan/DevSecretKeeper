@@ -1,0 +1,50 @@
+name: CI - 代码检查与测试
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r requirements.txt
+
+      - name: 代码风格检查 (flake8)
+        run: |
+          pip install flake8
+          # 阻止性错误
+          flake8 core/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # 警告级别
+          flake8 core/ tests/ --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
+
+      - name: 运行单元测试
+        run: |
+          python -m pytest tests/ -v --tb=short
+
+      - name: 导入检查
+        run: |
+          python -c "from core.crypto import encrypt_data, decrypt_data; print('core.crypto OK')"
+          python -c "from core.storage import load_entries, save_entries; print('core.storage OK')"
+          python -c "from core.db_tester import test_database_connection; print('core.db_tester OK')"
