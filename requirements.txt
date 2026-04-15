@@ -3,3 +3,4 @@ cryptography>=41.0.0
 pymysql>=1.1.0
 psycopg2-binary>=2.9.0
 keyboard>=0.13.5          # 用于全局快捷键（Windows/Linux）
+Pillow>=10.0.0            # PyInstaller 自动转换图标格式
